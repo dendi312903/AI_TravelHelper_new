@@ -1,3 +1,0 @@
-fastapi[standard]~=0.120.4
-streamlit~=1.51.0
-requests~=2.32.5
