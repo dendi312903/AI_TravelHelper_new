@@ -98,4 +98,5 @@ def login(username: str, password: str, response: Response):
 
 @app.get("/protected", dependencies=[Depends(security.access_token_required)])
 def get_protected():
+>>>>>>> d32b031 (перенес код из старого репозитория)
     return {"message": "Hello World"}
