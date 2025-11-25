@@ -16,7 +16,6 @@ out center;
 url = "https://overpass-api.de/api/interpreter"
 response = requests.post(url, data=query)
 data = response.json()
-
 cafes = []
 
 for element in data["elements"]:
@@ -42,7 +41,6 @@ for element in data["elements"]:
         "lon": lon,
         "address": address if address else "Адрес не указан"
     })
-
 print("Найденные кафе:")
 for c in cafes:
     print(f"- {c['name']} ({c['lat']}, {c['lon']}), {c['address']}")
