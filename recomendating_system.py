@@ -27,4 +27,3 @@ def recommend(user_id, top_n=3):
 recommend("user_1")
 recommend("user_2")
 recommend("user_3")
-
