@@ -7,6 +7,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from authx import AuthX, AuthXConfig
 from typing import Optional, List
 import requests
+import math
 
 app = FastAPI()
 engine = create_async_engine('sqlite+aiosqlite:///database.db')
@@ -257,32 +258,44 @@ def search_places(lat, lon, place_type="cafe", radius=1500, limit=10):
 
 @app.post('/get_places')
 async def get_places(request: PlaceRequest):
-    # Получаем координаты города
     coords = citygeocodes(request.city_name)
-    
+
     if not coords:
         return {
-            "error": "Город не найден",
-            "message": "Проверьте правильность написания названия города"
+            "error": "Город не найден"
         }
-    
+
     lat, lon = coords
-    
-    # Ищем места
+
     places = search_places(
-        lat=lat, 
-        lon=lon, 
-        place_type=request.amenity, 
-        radius=request.radius, 
+        lat=lat,
+        lon=lon,
+        place_type=request.amenity,
+        radius=request.radius,
         limit=request.limit
     )
-    
-    # Возвращаем результат
+
+    # профиль пользователя
+    user_vector = USER_PROFILE["dendi31"]["vector"]
+
+    for place in places:
+        # временно: считаем расстояние фиксированным
+        distance = 500
+
+        place_vector = place_to_vector(
+            place["type"],
+            distance
+        )
+
+        score = cosine_similarity(user_vector, place_vector)
+        place["score"] = round(score, 3)
+
+    # сортируем по релевантности
+    places.sort(key=lambda x: x["score"], reverse=True)
+
     return {
         "city": request.city_name,
-        "coordinates": {"latitude": lat, "longitude": lon},
         "amenity": request.amenity,
-        "radius": request.radius,
         "found": len(places),
         "places": places
     }
@@ -300,3 +313,45 @@ async def root():
             "limit": 10
         }
     }
+
+PLACE_TYPES = [
+    "cafe",
+    "restaurant",
+    "park",
+    "museum",
+    "bar",
+    "shop"
+]
+
+TYPE_INDEX = {t: i for i, t in enumerate(PLACE_TYPES)}
+
+
+def place_to_vector(place_type: str, distance: float):
+    vector = [0.0] * (len(PLACE_TYPES) + 1)
+
+    if place_type in TYPE_INDEX:
+        vector[TYPE_INDEX[place_type]] = 1.0
+
+    # расстояние: чем ближе — тем лучше
+    vector[-1] = max(0.0, 1.0 - distance / 2000)
+
+    return vector
+
+
+def cosine_similarity(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+
+    return dot / (norm_a * norm_b)
+
+
+USER_PROFILE = {
+    "dendi31": {
+        # cafe, restaurant, park, museum, bar, shop, distance
+        "vector": [1.0, 0.5, 0.6, 0.9, 0.5, 0.2, 0.6]
+    }
+}
