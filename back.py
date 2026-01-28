@@ -8,8 +8,29 @@ from authx import AuthX, AuthXConfig
 from typing import Optional, List
 import requests
 import math
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В продакшене заменить на конкретный домен
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+@app.get('/')
+async def root():
+    return {
+        "message": "API для поиска мест работает!",
+        "usage": "Отправьте POST запрос на /get_places",
+        "example": {
+            "city_name": "Москва",
+            "amenity": "cafe",
+            "radius": 1500,
+            "limit": 10
+        }
+    }
+    
 engine = create_async_engine('sqlite+aiosqlite:///database.db')
 
 new_session = async_sessionmaker(engine, expire_on_commit=False)
@@ -29,9 +50,7 @@ class PlaceModel(Base):
     name: Mapped[str]
     adding_data: Mapped[str]
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+
 
 @app.post('/setup_database')
 async def setup_database():
@@ -48,7 +67,7 @@ class PlaceSchema(PlaceAddSchema):
     id: int
 
 
-@app.get('/places')
+@app.get('/api/places')
 async def get_places(session: SessionDep):
     query = select(PlaceModel)
     result = await session.execute(query)
@@ -130,8 +149,6 @@ def citygeocodes(city_name):
 # Запрос к апи OSM с выбором категории
 def search_places(lat, lon, place_type="cafe", radius=1500, limit=10):
     """
-    Ищет места определенного типа в радиусе от координат.
-    
     Доступные типы мест:
     - cafe, restaurant, fast_food - еда и напитки
     - bar, pub, biergarten - бары и пабы
@@ -216,6 +233,8 @@ def search_places(lat, lon, place_type="cafe", radius=1500, limit=10):
     for element in data["elements"][:limit]:
         # Получение названия
         tags = element.get("tags", {})
+        if "name" not in tags:
+            continue
         name = tags.get("name", "Без названия")
         
         # Получение координат
@@ -256,14 +275,12 @@ def search_places(lat, lon, place_type="cafe", radius=1500, limit=10):
     
     return places
 
-@app.post('/get_places')
+@app.post('/api/search_places')
 async def get_places(request: PlaceRequest):
     coords = citygeocodes(request.city_name)
 
     if not coords:
-        return {
-            "error": "Город не найден"
-        }
+        raise HTTPException(400, detail="Город не найден")
 
     lat, lon = coords
 
@@ -300,19 +317,6 @@ async def get_places(request: PlaceRequest):
         "places": places
     }
 
-# Дополнительный эндпоинт для проверки работы API
-@app.get('/')
-async def root():
-    return {
-        "message": "API для поиска мест работает!",
-        "usage": "Отправьте POST запрос на /get_places",
-        "example": {
-            "city_name": "Москва",
-            "amenity": "cafe",
-            "radius": 1500,
-            "limit": 10
-        }
-    }
 
 PLACE_TYPES = [
     "cafe",
